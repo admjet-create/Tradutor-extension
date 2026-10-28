@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <title>Tradutor para Slack</title>
+  <style>
+    :root { color-scheme: light dark; --accent: #1d9bd1; --muted: #6b7280; }
+    body { font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; max-width: 640px; margin: 32px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin-bottom: 24px; }
+    label { display: block; font-weight: 600; margin-top: 20px; }
+    input[type="password"], input[type="text"], textarea { width: 100%; box-sizing: border-box; padding: 8px 10px; margin-top: 6px; border: 1px solid #c7c7c7; border-radius: 6px; font: inherit; background: transparent; color: inherit; }
+    textarea { min-height: 90px; resize: vertical; }
+    #basePrompt { min-height: 180px; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .check { display: flex; gap: 8px; align-items: center; }
+    .check input { margin: 0; }
+    button { margin-top: 24px; padding: 8px 20px; border: 0; border-radius: 6px; background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    button.link { background: none; color: var(--accent); padding: 0; margin: 4px 0 0; font-weight: 400; font-size: 12px; }
+    #status { margin-left: 12px; color: var(--muted); }
+  </style>
+</head>
+<body>
+  <h1>Tradutor para Slack</h1>
+
+  <label for="apiKey">Chave de API da Anthropic</label>
+  <input id="apiKey" type="password" autocomplete="off" placeholder="sk-ant-..." />
+  <div class="hint">Fica guardada só neste navegador. Nunca compartilhe essa chave.</div>
+
+  <label for="model">Modelo</label>
+  <input id="model" type="text" placeholder="claude-haiku-5-5" />
+  <div class="hint">Deixe em branco para usar o padrão (claude-haiku-5-5, o mais barato).</div>
+
+  <label class="check"><input id="autoTranslate" type="checkbox" /> Traduzir automaticamente as mensagens recebidas</label>
+  <div class="hint">Se desligar, cada mensagem ganha um botão 🌐 para traduzir só quando você clicar (gasta menos).</div>
+
+  <label for="glossary">Glossário (termos que ficam em inglês)</label>
+  <textarea id="glossary"></textarea>
+  <div class="hint">Um por linha ou separados por vírgula.</div>
+
+  <label for="basePrompt">Prompt base</label>
+  <textarea id="basePrompt"></textarea>
+  <div class="hint">Instruções que o tradutor segue em toda mensagem.</div>
+  <button type="button" class="link" id="resetPrompt">Restaurar prompt original</button>
+
+  <div>
+    <button id="save" type="button">Salvar</button>
+    <span id="status"></span>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
