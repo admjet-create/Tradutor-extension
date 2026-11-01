@@ -3,7 +3,6 @@
 (() => {
   const MESSAGE_SELECTOR = '[data-qa="message-text"]';
   const EDITOR_SELECTOR = '.ql-editor[contenteditable="true"]';
-  const TYPING_DELAY_MS = 800;
 
   let autoTranslate = true;
 
@@ -126,134 +125,8 @@
     root.querySelectorAll?.(MESSAGE_SELECTOR).forEach(processMessage);
   }
 
-  // ---------- Painel de tradução do que você digita ----------
-
-  const panel = document.createElement("div");
-  panel.className = "tps-panel";
-  panel.hidden = true;
-  panel.innerHTML = `
-    <div class="tps-panel-head"><span class="tps-dot"></span>Inglês — Alt+T insere na mensagem</div>
-    <div class="tps-panel-body"></div>
-    <div class="tps-panel-actions">
-      <button type="button" class="tps-insert">Inserir</button>
-      <button type="button" class="tps-copy">Copiar</button>
-    </div>`;
-  const panelBody = panel.querySelector(".tps-panel-body");
-  const panelActions = panel.querySelector(".tps-panel-actions");
-
-  let activeEditor = null;
-  let currentTranslation = "";
-  let typingTimer = 0;
-  let requestSeq = 0;
-  let lastInserted = "";
-
-  function editorText(editor) {
-    return editor.innerText.replace(/​/g, "").trim();
-  }
-
-  function positionPanel() {
-    if (panel.hidden || !activeEditor) return;
-    const anchor = activeEditor.closest('[data-qa="message_input"]') || activeEditor;
-    const rect = anchor.getBoundingClientRect();
-    panel.style.left = `${Math.max(8, rect.left)}px`;
-    panel.style.bottom = `${window.innerHeight - rect.top + 8}px`;
-    panel.style.maxWidth = `${Math.max(260, rect.width)}px`;
-  }
-
-  function showPanel() {
-    if (!panel.isConnected) document.body.append(panel);
-    panel.hidden = false;
-    positionPanel();
-  }
-
-  function hidePanel() {
-    panel.hidden = true;
-    currentTranslation = "";
-    requestSeq++;
-  }
-
-  async function translateDraft(editor) {
-    const text = editorText(editor);
-    if (!text || text === lastInserted || languageOf(text) === "en") {
-      hidePanel();
-      return;
-    }
-
-    const seq = ++requestSeq;
-    currentTranslation = "";
-    panelActions.hidden = true;
-    panelBody.classList.remove("tps-error");
-    panelBody.textContent = "Traduzindo…";
-    showPanel();
-
-    const res = await requestTranslation(text, "en", true);
-    if (seq !== requestSeq) return; // chegou uma tradução de um texto antigo
-
-    if (res.ok) {
-      currentTranslation = res.translation;
-      panelBody.textContent = res.translation;
-      panelActions.hidden = false;
-    } else {
-      panelBody.classList.add("tps-error");
-      renderError(panelBody, res);
-    }
-    positionPanel();
-  }
-
-  function insertTranslation() {
-    if (!currentTranslation || !activeEditor?.isConnected) return;
-    const translation = currentTranslation;
-    activeEditor.focus();
-    document.execCommand("selectAll");
-    document.execCommand("insertText", false, translation);
-    lastInserted = translation;
-    hidePanel();
-  }
-
-  async function copyTranslation() {
-    if (!currentTranslation) return;
-    await navigator.clipboard.writeText(currentTranslation);
-    const btn = panel.querySelector(".tps-copy");
-    btn.textContent = "Copiado";
-    setTimeout(() => (btn.textContent = "Copiar"), 1200);
-  }
-
-  // Impede que o clique nos botões tire o foco da caixa de mensagem.
-  panel.addEventListener("mousedown", (e) => e.preventDefault());
-  panel.querySelector(".tps-insert").addEventListener("click", insertTranslation);
-  panel.querySelector(".tps-copy").addEventListener("click", copyTranslation);
-
-  document.addEventListener(
-    "input",
-    (e) => {
-      const editor = e.target.closest?.(EDITOR_SELECTOR);
-      if (!editor) return;
-      activeEditor = editor;
-      clearTimeout(typingTimer);
-      typingTimer = setTimeout(() => translateDraft(editor), TYPING_DELAY_MS);
-    },
-    true
-  );
-
-  document.addEventListener(
-    "keydown",
-    (e) => {
-      if (e.altKey && !e.ctrlKey && !e.metaKey && e.code === "KeyT" && currentTranslation) {
-        e.preventDefault();
-        e.stopPropagation();
-        insertTranslation();
-      }
-    },
-    true
-  );
-
-  // O Slack limpa a caixa ao enviar sem disparar "input"; checamos de tempos em tempos.
-  setInterval(() => {
-    if (panel.hidden) return;
-    if (!activeEditor?.isConnected || !editorText(activeEditor)) hidePanel();
-    else positionPanel();
-  }, 500);
-  window.addEventListener("resize", positionPanel);
+  // Compartilhado com composer.js (mesmo contexto isolado da extensão).
+  globalThis.TPS = { EDITOR_SELECTOR, languageOf, requestTranslation, renderError };
 
   // ---------- Inicialização ----------
 

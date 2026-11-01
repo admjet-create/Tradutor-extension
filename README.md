@@ -5,7 +5,8 @@ Extensão do Google Chrome que traduz mensagens do Slack entre inglês e portugu
 ## O que ela faz
 
 - **Mensagens recebidas em inglês** ganham a tradução em português logo abaixo, com uma barra azul ao lado. Se a tradução automática estiver desligada, cada mensagem ganha um botão 🌐 para traduzir só quando você clicar.
-- **O que você digita em português** aparece traduzido para o inglês num painel acima da caixa de mensagem. Clique em **Inserir** (ou aperte **Alt+T**) para trocar o texto pela tradução, ou em **Copiar**.
+- **O que você digita em português** aparece traduzido para o inglês num painel acima da caixa de mensagem. Clique em **Inserir** (ou aperte **Alt+T**, que no Mac é **Option+T**) para trocar o texto pela tradução, ou em **Copiar**. Depois de inserir, o botão **Desfazer** fica alguns segundos na tela para voltar ao texto original.
+- Se o texto da caixa de mensagem **sumir sem você apagar nem enviar**, aparece um aviso com o botão **Restaurar texto**.
 - Termos do **glossário** (FOH, IEM, DCA, stems…) ficam em inglês.
 - O **prompt base** do tradutor pode ser editado nas opções.
 

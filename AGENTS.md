@@ -13,7 +13,8 @@ Extensão do Chrome (Manifest V3, JavaScript puro, sem build) que traduz o Slack
 - `extension/manifest.json`: permissões mínimas (`storage` e `api.anthropic.com`); content script só em `app.slack.com`.
 - `extension/settings.js`: prompt base do Rafael, glossário padrão, modelo padrão e leitura das configurações. Fonte única desses valores.
 - `extension/background.js`: service worker. Recebe `{type: "translate", text, target: "pt" | "en"}`, chama `POST /v1/messages` com `fetch`, mantém cache e fila (máx. 3 em paralelo; o rascunho tem prioridade).
-- `extension/content.js` + `content.css`: detecta mensagens novas com `MutationObserver`, faz uma detecção simples de idioma, mostra traduções e o painel de envio.
+- `extension/content.js` + `content.css`: detecção simples de idioma, conversa com o service worker e tradução das mensagens recebidas (`MutationObserver`). Expõe o que é compartilhado em `globalThis.TPS`.
+- `extension/composer.js`: painel acima da caixa de mensagem. Só substitui o texto se a tradução for da versão atual do rascunho (senão traduz de novo e insere quando chegar), oferece Desfazer e oferece Restaurar quando o texto some sem `input` nem envio.
 - `extension/options.html` + `options.js`: página de opções.
 
 ## Regras
@@ -23,4 +24,5 @@ Extensão do Chrome (Manifest V3, JavaScript puro, sem build) que traduz o Slack
 - O prompt base em `settings.js` é o texto do Rafael; não reescreva sem pedido dele.
 - Mantenha o projeto sem etapa de build enquanto for possível. Arquivos com no máximo ~350 linhas.
 - Ao mudar seletores do Slack, comportamento ou opções, atualize README.md e PRODUCT.md e rode o teste de fumaça.
+- Nunca troque o texto da caixa do Slack com `document.execCommand("selectAll")`: selecione só o conteúdo do editor (`replaceEditorText` em `composer.js`).
 - Revise o diff antes de entregar: chamadas à API, tratamento de erros e o que acontece sem chave configurada.

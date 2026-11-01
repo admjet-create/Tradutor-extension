@@ -18,6 +18,10 @@ const SLACK_HTML = `<!doctype html><html><head><meta charset="utf-8"></head><bod
 </div>
 </body></html>`;
 
+function editorText(page) {
+  return page.$eval(".ql-editor", (e) => e.innerText.trim());
+}
+
 async function main() {
   fs.rmSync(PROFILE, { recursive: true, force: true });
   const ctx = await chromium.launchPersistentContext(PROFILE, {
@@ -66,8 +70,35 @@ async function main() {
     assert.match(await page.$eval(".tps-panel-body", (e) => e.textContent), /^\[EN\] Mano, tu é idiota$/);
 
     await page.keyboard.press("Alt+T");
-    assert.equal(await page.$eval(".ql-editor", (e) => e.innerText.trim()), "[EN] Mano, tu é idiota");
-    assert.equal(await page.$eval(".tps-panel", (p) => p.hidden), true);
+    assert.equal(await editorText(page), "[EN] Mano, tu é idiota");
+
+    // Desfazer devolve o texto original.
+    await page.waitForSelector(".tps-panel[data-mode=undo] .tps-insert:visible");
+    await page.click(".tps-insert");
+    assert.equal(await editorText(page), "Mano, tu é idiota");
+
+    // Digitar depois da tradução e apertar Alt+T na hora não pode perder o final do texto.
+    await page.waitForSelector(".tps-panel[data-mode=translate] .tps-insert:visible");
+    await page.keyboard.type(" demais");
+    await page.keyboard.press("Alt+T");
+    await page.waitForFunction(() => document.querySelector(".ql-editor").innerText.trim().startsWith("[EN]"));
+    assert.equal(await editorText(page), "[EN] Mano, tu é idiota demais");
+    assert.equal(await page.evaluate(() => document.querySelector(".ql-editor").innerText.includes("†")), false);
+
+    // Texto que some sem você apagar nem enviar: o painel oferece restaurar.
+    await page.click(".ql-editor");
+    await page.keyboard.press("End");
+    await page.keyboard.type(" ok");
+    await page.evaluate(() => (document.querySelector(".ql-editor").innerHTML = ""));
+    await page.waitForSelector(".tps-panel[data-mode=restore] .tps-insert:visible");
+    await page.click(".tps-insert");
+    assert.equal(await editorText(page), "[EN] Mano, tu é idiota demais ok");
+
+    // Enviar com Enter não pode disparar o aviso de texto sumido.
+    await page.keyboard.press("Enter");
+    await page.evaluate(() => (document.querySelector(".ql-editor").innerHTML = ""));
+    await page.waitForTimeout(1200);
+    assert.notEqual(await page.$eval(".tps-panel", (p) => !p.hidden && p.dataset.mode), "restore");
 
     const first = calls[0];
     assert.equal(first.headers["x-api-key"], "sk-test");
@@ -76,8 +107,7 @@ async function main() {
     assert.equal(first.body.model, "claude-haiku-5-5");
     assert.match(first.body.system, /engenharia de áudio/);
     assert.match(first.body.system, /FOH/);
-    assert.equal(calls.length, 3);
-    console.log("ok: tradução recebida, mensagem nova, painel de envio e Alt+T");
+    console.log("ok: tradução recebida, mensagem nova, painel de envio, Alt+T, desfazer, texto alterado e restaurar");
   } finally {
     await ctx.close();
     fs.rmSync(PROFILE, { recursive: true, force: true });
