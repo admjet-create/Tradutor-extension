@@ -33,7 +33,7 @@ function buildSystem(settings) {
   const glossary = terms.length
     ? `\n\nGlossário: mantenha estes termos em inglês, sem traduzir: ${terms.join(", ")}.`
     : "";
-  return `${base}${glossary}\n\nResponda somente com o texto traduzido, sem aspas, comentários ou explicações. Preserve emojis, menções (@nome), links e quebras de linha.`;
+  return `${base}${glossary}\n\nResponda somente com o texto traduzido, sem aspas, comentários ou explicações. Preserve emojis, menções (@nome), links e quebras de linha. Marcadores como ⟦1⟧ representam menções ou emojis: mantenha cada um exatamente como está, uma vez só e na mesma ordem.`;
 }
 
 function friendlyError(status, body) {

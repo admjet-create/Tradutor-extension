@@ -18,8 +18,19 @@ const SLACK_HTML = `<!doctype html><html><head><meta charset="utf-8"></head><bod
 </div>
 </body></html>`;
 
+// Troca o rascunho como o Slack faz ao completar uma menção, avisando com "input".
+function setDraft(page, html) {
+  return page.evaluate((h) => {
+    const editor = document.querySelector(".ql-editor");
+    editor.innerHTML = h;
+    editor.focus();
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  }, html);
+}
+
 function editorText(page) {
-  return page.$eval(".ql-editor", (e) => e.innerText.trim());
+  // O Chrome usa espaço não separável ao lado de menções; para o Slack é um espaço comum.
+  return page.$eval(".ql-editor", (e) => e.innerText.replace(/\u00a0/g, " ").trim());
 }
 
 async function main() {
@@ -36,10 +47,11 @@ async function main() {
       calls.push({ headers: route.request().headers(), body });
       const content = body.messages[0].content;
       const text = content.match(/<texto>\n([\s\S]*)\n<\/texto>/)[1];
+      const reply = text.includes("perde") ? text.replace(/⟦\d+⟧/g, "@Ana") : text;
       const tag = content.includes("inglês") ? "EN" : "PT";
       await route.fulfill({
         json: {
-          content: [{ type: "thinking", thinking: "" }, { type: "text", text: `[${tag}] ${text}` }],
+          content: [{ type: "thinking", thinking: "" }, { type: "text", text: `[${tag}] ${reply}` }],
           stop_reason: "end_turn",
         },
       });
@@ -93,6 +105,27 @@ async function main() {
     await page.waitForSelector(".tps-panel[data-mode=restore] .tps-insert:visible");
     await page.click(".tps-insert");
     assert.equal(await editorText(page), "[EN] Mano, tu é idiota demais ok");
+
+    // Menções: a tradução reescreve só o texto em volta e a menção continua sendo a mesma.
+    await setDraft(page, '<p>Oi <ts-mention contenteditable="false" data-id="U1">@Ana</ts-mention>, você checou o mix?</p>');
+    await page.waitForSelector(".tps-panel[data-mode=translate] .tps-insert:visible");
+    assert.equal(await page.$eval(".tps-panel-body", (e) => e.textContent), "[EN] Oi @Ana, você checou o mix?");
+    await page.evaluate(() => (window.mention = document.querySelector("ts-mention")));
+    await page.keyboard.press("Alt+T");
+    assert.equal(await editorText(page), "[EN] Oi @Ana, você checou o mix?");
+    assert.equal(await page.evaluate(() => window.mention.isConnected && window.mention.parentElement.closest(".ql-editor") !== null), true);
+
+    await page.waitForSelector(".tps-panel[data-mode=undo] .tps-insert:visible");
+    await page.click(".tps-insert");
+    assert.equal(await editorText(page), "Oi @Ana, você checou o mix?");
+    assert.equal(await page.evaluate(() => window.mention.isConnected), true);
+
+    // Se a tradução perder o marcador da menção, o texto fica como estava.
+    await setDraft(page, '<p>Oi <ts-mention contenteditable="false" data-id="U1">@Ana</ts-mention>, você perde o cabo?</p>');
+    await page.waitForSelector(".tps-panel[data-mode=translate] .tps-insert:visible");
+    await page.keyboard.press("Alt+T");
+    assert.equal(await editorText(page), "Oi @Ana, você perde o cabo?");
+    assert.match(await page.$eval(".tps-panel-body", (e) => e.textContent), /Não consegui inserir/);
 
     // Enviar com Enter não pode disparar o aviso de texto sumido.
     await page.keyboard.press("Enter");

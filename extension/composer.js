@@ -88,19 +88,24 @@
       hidePanel();
       return;
     }
+    const source = sourceOf(editor);
+    if (!source.replace(/⟦\d+⟧/g, "").trim()) {
+      hidePanel();
+      return;
+    }
 
     const seq = ++requestSeq;
     currentTranslation = "";
     translatedSource = "";
     showLoading();
 
-    const res = await requestTranslation(text, "en", true);
+    const res = await requestTranslation(source, "en", true);
     if (seq !== requestSeq) return; // chegou uma tradução de um texto antigo
 
     if (res.ok) {
       currentTranslation = res.translation;
       translatedSource = text;
-      panelBody.textContent = res.translation;
+      panelBody.textContent = labelled(res.translation, editor);
       panelActions.hidden = false;
       if (insertWhenReady) {
         insertWhenReady = false;
@@ -129,6 +134,64 @@
     return true;
   }
 
+  // Menções, emojis e outros blocos que o Slack trata como uma peça só. Eles não são
+  // reescritos: viram marcadores ⟦1⟧, ⟦2⟧… na tradução e ficam no lugar na caixa.
+  const EMBED_SELECTOR = 'ts-mention, ts-emoji, [contenteditable="false"], img';
+
+  function embedsOf(root) {
+    return [...root.querySelectorAll(EMBED_SELECTOR)].filter((el) => {
+      const outer = el.parentElement?.closest(EMBED_SELECTOR);
+      return !outer || !root.contains(outer);
+    });
+  }
+
+  // Texto da caixa com os blocos trocados por marcadores, uma linha por parágrafo.
+  function sourceOf(editor) {
+    const clone = editor.cloneNode(true);
+    embedsOf(clone).forEach((el, i) => el.replaceWith(`⟦${i + 1}⟧`));
+    const blocks = [...clone.children].filter((c) => /^(P|DIV|LI|BLOCKQUOTE|PRE)$/.test(c.tagName));
+    const text = blocks.length ? blocks.map((b) => b.textContent).join("\n") : clone.textContent;
+    return text.replace(/\u200b/g, "").trim();
+  }
+
+  // Mostra os marcadores com o nome de volta (ex.: ⟦1⟧ -> @Ana).
+  function labelled(text, editor) {
+    const embeds = editor ? embedsOf(editor) : [];
+    return text.replace(/⟦(\d+)⟧/g, (m, n) => embeds[n - 1]?.textContent || m);
+  }
+
+  function selectRange(editor, range) {
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return editor.contains(selection.anchorNode) && editor.contains(selection.focusNode);
+  }
+
+  // Reescreve só o texto entre os blocos, do fim para o começo, sem tocar nas menções.
+  // Devolve false (sem mexer em nada) se a tradução não trouxer os marcadores na ordem.
+  function replaceSegments(editor, text) {
+    if (!editor?.isConnected) return false;
+    const embeds = embedsOf(editor);
+    const parts = text.split(/⟦(\d+)⟧/);
+    const order = parts.filter((_, i) => i % 2 === 1).map(Number);
+    if (order.length !== embeds.length || order.some((n, i) => n !== i + 1)) return false;
+    const segments = parts.filter((_, i) => i % 2 === 0);
+
+    editor.focus();
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const range = document.createRange();
+      if (i === 0) range.setStart(editor, 0);
+      else range.setStartAfter(embeds[i - 1]);
+      if (i === embeds.length) range.setEnd(editor, editor.childNodes.length);
+      else range.setEndBefore(embeds[i]);
+      if (range.collapsed && !segments[i]) continue;
+      if (!selectRange(editor, range)) return false;
+      if (segments[i]) document.execCommand("insertText", false, segments[i]);
+      else document.execCommand("delete");
+    }
+    return embeds.every((el) => el.isConnected);
+  }
+
   function insertTranslation() {
     if (!activeEditor?.isConnected) return;
     const current = editorText(activeEditor);
@@ -142,10 +205,17 @@
       return;
     }
 
-    const original = current;
-    const translation = currentTranslation;
-    if (!replaceEditorText(activeEditor, translation)) return;
-    lastInserted = translation;
+    const original = sourceOf(activeEditor);
+    if (!replaceSegments(activeEditor, currentTranslation)) {
+      // Não dá para inserir sem arriscar as menções: deixa o texto como está.
+      navigator.clipboard.writeText(labelled(currentTranslation, activeEditor)).catch(() => {});
+      panelBody.classList.add("tps-error");
+      panelBody.textContent =
+        "Não consegui inserir sem mexer nas menções. Seu texto ficou como estava e a tradução foi copiada.";
+      panelActions.hidden = true;
+      return;
+    }
+    lastInserted = editorText(activeEditor);
     draft = { editor: activeEditor, text: editorText(activeEditor), url: location.href };
     hidePanel();
     offerUndo(original);
@@ -155,7 +225,7 @@
     undoText = original;
     setMode("undo");
     panelBody.classList.remove("tps-error");
-    panelBody.textContent = original;
+    panelBody.textContent = labelled(original, activeEditor);
     panelActions.hidden = false;
     showPanel();
     clearTimeout(undoTimer);
@@ -181,16 +251,24 @@
     translateDraft(activeEditor);
   }
 
+  function undoInsert() {
+    if (!replaceSegments(activeEditor, undoText)) return;
+    lastInserted = "";
+    draft = { editor: activeEditor, text: editorText(activeEditor), url: location.href };
+    hidePanel();
+    translateDraft(activeEditor);
+  }
+
   function onPrimaryAction() {
     const mode = panel.dataset.mode;
-    if (mode === "undo") restoreText(undoText);
+    if (mode === "undo") undoInsert();
     else if (mode === "restore") restoreText(lostDraft);
     else insertTranslation();
   }
 
   async function copyTranslation() {
     if (!currentTranslation) return;
-    await navigator.clipboard.writeText(currentTranslation);
+    await navigator.clipboard.writeText(labelled(currentTranslation, activeEditor));
     copyBtn.textContent = "Copiado";
     setTimeout(() => (copyBtn.textContent = "Copiar"), 1200);
   }
